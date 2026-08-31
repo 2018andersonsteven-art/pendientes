@@ -125,3 +125,72 @@
   .ok-msg{background:var(--ok-bg);color:var(--ok);font-size:13px;padding:10px 12px;border-radius:10px;margin:0 0 12px;display:none}
   .ok-msg.show{display:block}
   .installhint{font-size:12.5px;color:var(--muted);margin:12px 2px 0;line-height:1.5}
+
+  /* ===================== movimiento e interacción ===================== */
+  :root{ --ease:cubic-bezier(.2,.85,.3,1); --ease-out:cubic-bezier(.16,1,.3,1) }
+
+  /* onda al tocar */
+  .item,.addrow,.btn,.iconbtn,.menuitem,.mini,.monthname{position:relative;overflow:hidden}
+  .ripple{
+    position:absolute;border-radius:50%;transform:scale(0);pointer-events:none;
+    background:currentColor;opacity:.16;animation:rip .55s var(--ease-out) forwards
+  }
+  @keyframes rip{ to{ transform:scale(2.6); opacity:0 } }
+
+  /* filas */
+  .item{transition:background .18s ease,transform .14s var(--ease)}
+  .item.press{transform:scale(.985)}
+  .item.enter{animation:rowin .34s var(--ease-out) both}
+  .item.leave{animation:rowout .26s ease forwards}
+  @keyframes rowin{ from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+  @keyframes rowout{ to{opacity:0;transform:translateX(28px);max-height:0;padding-top:0;padding-bottom:0} }
+
+  .box{transition:background .24s var(--ease),border-color .24s var(--ease),color .18s ease}
+  .box.pop{animation:pop .38s var(--ease)}
+  @keyframes pop{ 0%{transform:scale(1)} 30%{transform:scale(1.3)} 60%{transform:scale(.94)} 100%{transform:scale(1)} }
+
+  .it-title{transition:opacity .22s ease,text-decoration-color .22s ease}
+  .status{transition:background .24s ease,color .24s ease}
+  .status.swap{animation:swapin .3s var(--ease-out)}
+  @keyframes swapin{ from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
+
+  /* tarjetas al entrar */
+  .card{animation:cardin .4s var(--ease-out) both}
+  @keyframes cardin{ from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+
+  /* cambio de mes */
+  #app.out-left{animation:outL .16s ease forwards}
+  #app.out-right{animation:outR .16s ease forwards}
+  @keyframes outL{ to{opacity:0;transform:translateX(-16px)} }
+  @keyframes outR{ to{opacity:0;transform:translateX(16px)} }
+  .monthname{transition:transform .14s var(--ease)}
+  .monthname.bump{animation:bump .32s var(--ease)}
+  @keyframes bump{ 0%{transform:scale(1)} 40%{transform:scale(1.04)} 100%{transform:scale(1)} }
+
+  /* contadores */
+  .seccount{transition:background .3s ease,color .3s ease}
+  .seccount.full{background:var(--ok-bg);color:var(--ok)}
+  .seccount.pulse{animation:pop .45s var(--ease)}
+  .meter > i{transition:width .45s var(--ease-out)}
+  .savepill{transition:background .25s ease,color .25s ease}
+
+  /* botones */
+  .iconbtn,.btn,.mini{transition:transform .14s var(--ease),background .2s ease,border-color .2s ease,color .2s ease}
+  .iconbtn:active,.btn:active,.mini:active{transform:scale(.92)}
+  .btn:hover,.mini:hover,.iconbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary:hover{color:#fff;filter:brightness(1.06)}
+  .addrow{transition:background .2s ease,padding-left .2s var(--ease)}
+  .addrow:hover{background:var(--surface-2);padding-left:20px}
+
+  /* hojas que suben */
+  .overlay{display:flex;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .24s ease,visibility 0s linear .24s}
+  .overlay.open{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .24s ease,visibility 0s}
+  .sheet{transform:translateY(24px);transition:transform .32s var(--ease-out)}
+  .overlay.open .sheet{transform:none}
+  .menuitem{transition:background .18s ease,padding-left .18s var(--ease)}
+  .menuitem:hover{padding-left:18px}
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+    .ripple{display:none}
+  }

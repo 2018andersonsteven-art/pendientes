@@ -14,6 +14,16 @@ var LABELS = {
 };
 var GLYPH = ["","✓","»","!"];
 
+var REDUCE = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var refs = [], flashId = null;
+function buzz(ms){ try{ if(navigator.vibrate && !REDUCE) navigator.vibrate(ms); }catch(e){} }
+function replay(el, cls){
+  if(REDUCE || !el) return;
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
 var db = null;
 var today = new Date();
 var view = { y: today.getFullYear(), m: today.getMonth() };
@@ -261,12 +271,61 @@ function dueInfo(item, st){
   return null;
 }
 
+function fillMeta(meta, item, st){
+  if(!meta) return;
+  meta.innerHTML = "";
+  if(item.day) meta.appendChild(mk("span","pill","antes del " + item.day));
+  if(item.note) meta.appendChild(mk("span",null,item.note));
+  var due = dueInfo(item, st);
+  if(due) meta.appendChild(mk("span","pill " + due.cls, due.txt));
+}
+function updateRow(row, sec, item){
+  var st = stateOf(item.id);
+  row.className = "item st" + st;
+  var box = row.querySelector(".box");
+  box.textContent = GLYPH[st];
+  replay(box, "pop");
+  var status = row.querySelector(".status");
+  if(status){
+    status.textContent = (LABELS[sec.kind] || LABELS.otro)[st];
+    replay(status, "swap");
+  }
+  fillMeta(row.querySelector(".it-meta"), item, st);
+  buzz(st === 1 ? 14 : 8);
+  refreshCounts();
+}
+function refreshCounts(){
+  var total = 0, done = 0;
+  refs.forEach(function(r){
+    var d = r.sec.items.filter(function(i){ return stateOf(i.id) === 1; }).length;
+    total += r.sec.items.length; done += d;
+    if(r.countEl){
+      var txt = d + "/" + r.sec.items.length;
+      if(r.countEl.textContent !== txt){ r.countEl.textContent = txt; replay(r.countEl, "pulse"); }
+      r.countEl.classList.toggle("full", r.sec.items.length > 0 && d === r.sec.items.length);
+    }
+  });
+  var pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById("barFill").style.width = pct + "%";
+  document.getElementById("barText").textContent = done + " de " + total + " listos";
+  document.getElementById("barPct").textContent = pct + "%";
+}
+function swapMonth(dir){
+  replay(document.getElementById("monthName"), "bump");
+  if(REDUCE){ render(); return; }
+  app.classList.add(dir < 0 ? "out-right" : "out-left");
+  setTimeout(function(){
+    app.classList.remove("out-left","out-right");
+    render();
+  }, 160);
+}
+
 function render(){
   if(!db) return;
   app.innerHTML = "";
+  refs = [];
   document.getElementById("monthName").textContent = MESES[view.m] + " " + view.y;
   document.getElementById("btnEdit").classList.toggle("on", editMode);
-  var total = 0, done = 0;
 
   db.sections.forEach(function(sec, si){
     var card = mk("div","card");
@@ -279,24 +338,25 @@ function render(){
       tools.appendChild(btn("↓", function(){ move(db.sections, si, 1); save(); render(); }));
       tools.appendChild(delBtn("sec-"+sec.id, function(){ db.sections.splice(si,1); save(); render(); }));
       head.appendChild(tools);
+      refs.push({sec:sec, countEl:null});
     } else {
       var d = sec.items.filter(function(i){ return stateOf(i.id) === 1; }).length;
-      head.appendChild(mk("div","seccount", d + "/" + sec.items.length));
+      var countEl = mk("div","seccount", d + "/" + sec.items.length);
+      if(sec.items.length && d === sec.items.length) countEl.classList.add("full");
+      head.appendChild(countEl);
+      refs.push({sec:sec, countEl:countEl});
     }
     card.appendChild(head);
 
     sec.items.forEach(function(item, ii){
       var st = stateOf(item.id);
-      total++; if(st === 1) done++;
       var row = mk("div","item st" + st);
+      if(item.id === flashId) row.classList.add("enter");
       row.appendChild(mk("div","box", GLYPH[st]));
       var body = mk("div","it-body");
       body.appendChild(mk("div","it-title", item.title));
       var meta = mk("div","it-meta");
-      if(item.day) meta.appendChild(mk("span","pill","antes del " + item.day));
-      if(item.note) meta.appendChild(mk("span",null,item.note));
-      var due = dueInfo(item, st);
-      if(due) meta.appendChild(mk("span","pill " + due.cls, due.txt));
+      fillMeta(meta, item, st);
       body.appendChild(meta);
       row.appendChild(body);
 
@@ -306,16 +366,21 @@ function render(){
         rt.appendChild(btn("↑", function(e){ e.stopPropagation(); move(sec.items, ii, -1); save(); render(); }));
         rt.appendChild(btn("↓", function(e){ e.stopPropagation(); move(sec.items, ii, 1); save(); render(); }));
         rt.appendChild(delBtn("it-"+item.id, function(){
-          sec.items.splice(ii,1);
-          Object.keys(db.marks).forEach(function(k){ delete db.marks[k][item.id]; });
-          save(); render();
+          var doRemove = function(){
+            sec.items.splice(ii,1);
+            Object.keys(db.marks).forEach(function(k){ delete db.marks[k][item.id]; });
+            save(); render();
+          };
+          if(REDUCE) return doRemove();
+          row.classList.add("leave");
+          setTimeout(doRemove, 240);
         }));
         row.appendChild(rt);
       } else {
         row.appendChild(mk("div","status", (LABELS[sec.kind] || LABELS.otro)[st]));
         row.addEventListener("click", function(){
           setState(item.id, (stateOf(item.id) + 1) % 4);
-          render();
+          updateRow(row, sec, item);
         });
       }
       card.appendChild(row);
@@ -324,13 +389,12 @@ function render(){
     var add = mk("div","addrow","+ Agregar pendiente");
     add.addEventListener("click", function(){ openItemEditor(sec, null); });
     card.appendChild(add);
+    if(!REDUCE) card.style.animationDelay = Math.min(si * 45, 180) + "ms";
     app.appendChild(card);
   });
 
-  var pct = total ? Math.round(done/total*100) : 0;
-  document.getElementById("barFill").style.width = pct + "%";
-  document.getElementById("barText").textContent = done + " de " + total + " listos";
-  document.getElementById("barPct").textContent = pct + "%";
+  flashId = null;
+  refreshCounts();
 }
 
 /* ============ editor ============ */
@@ -371,8 +435,13 @@ document.getElementById("edSave").addEventListener("click", function(){
     var note = document.getElementById("edNote").value.trim();
     var dayRaw = parseInt(document.getElementById("edDay").value,10);
     var day = (dayRaw >= 1 && dayRaw <= 31) ? dayRaw : null;
-    if(edItem){ edItem.title = name; edItem.note = note; edItem.day = day; }
-    else { edSec.items.push({id:uid(), title:name, note:note, day:day}); }
+    if(edItem){ edItem.title = name; edItem.note = note; edItem.day = day; flashId = edItem.id; }
+    else {
+      var nuevo = {id:uid(), title:name, note:note, day:day};
+      edSec.items.push(nuevo);
+      flashId = nuevo.id;
+      buzz(12);
+    }
   } else {
     var kind = document.getElementById("edKind").value;
     if(edSec){ edSec.name = name; edSec.kind = kind; }
@@ -383,13 +452,56 @@ document.getElementById("edSave").addEventListener("click", function(){
 
 /* ============ cabecera ============ */
 document.getElementById("prev").addEventListener("click", function(){
-  view.m--; if(view.m < 0){ view.m = 11; view.y--; } confirmDel = null; render();
+  view.m--; if(view.m < 0){ view.m = 11; view.y--; } confirmDel = null; swapMonth(-1);
 });
 document.getElementById("next").addEventListener("click", function(){
-  view.m++; if(view.m > 11){ view.m = 0; view.y++; } confirmDel = null; render();
+  view.m++; if(view.m > 11){ view.m = 0; view.y++; } confirmDel = null; swapMonth(1);
 });
 document.getElementById("monthName").addEventListener("click", function(){
-  var n = new Date(); view.y = n.getFullYear(); view.m = n.getMonth(); render();
+  var n = new Date();
+  if(n.getFullYear() === view.y && n.getMonth() === view.m) return;
+  var dir = (n.getFullYear() * 12 + n.getMonth()) < (view.y * 12 + view.m) ? -1 : 1;
+  view.y = n.getFullYear(); view.m = n.getMonth();
+  swapMonth(dir);
+});
+
+/* deslizar con el dedo para cambiar de mes */
+(function swipe(){
+  var x0 = null, y0 = null;
+  app.addEventListener("touchstart", function(e){
+    if(e.touches.length !== 1) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+  }, {passive:true});
+  app.addEventListener("touchend", function(e){
+    if(x0 === null) return;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if(Math.abs(dx) < 70 || Math.abs(dy) > 50) return;
+    if(dx < 0){ view.m++; if(view.m > 11){ view.m = 0; view.y++; } swapMonth(1); }
+    else { view.m--; if(view.m < 0){ view.m = 11; view.y--; } swapMonth(-1); }
+    buzz(8);
+  }, {passive:true});
+})();
+
+/* onda al tocar cualquier control */
+document.addEventListener("pointerdown", function(e){
+  if(REDUCE) return;
+  var el = e.target.closest && e.target.closest(".item,.addrow,.btn,.iconbtn,.menuitem,.mini,.monthname");
+  if(!el) return;
+  var r = el.getBoundingClientRect();
+  var d = Math.max(r.width, r.height);
+  var s = document.createElement("span");
+  s.className = "ripple";
+  s.style.width = s.style.height = d + "px";
+  s.style.left = (e.clientX - r.left - d/2) + "px";
+  s.style.top = (e.clientY - r.top - d/2) + "px";
+  el.appendChild(s);
+  setTimeout(function(){ if(s.parentNode) s.parentNode.removeChild(s); }, 620);
+  if(el.classList.contains("item")){
+    el.classList.add("press");
+    setTimeout(function(){ el.classList.remove("press"); }, 170);
+  }
 });
 document.getElementById("btnEdit").addEventListener("click", function(){
   editMode = !editMode; confirmDel = null; render();

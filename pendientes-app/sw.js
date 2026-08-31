@@ -1,6 +1,6 @@
 /* Service worker: hace que la app abra aunque no haya internet.
    Sube el número de CACHE cada vez que cambies algo del código. */
-var CACHE = "pendientes-v1";
+var CACHE = "pendientes-v2";
 var SHELL = [
   "./",
   "./index.html",
