@@ -568,6 +568,7 @@ document.getElementById("fileIn").addEventListener("change", function(e){
 
 /* ============ cuenta ============ */
 var auth = document.getElementById("auth");
+var pendingEmail = "";
 function openAuth(){
   var msg = document.getElementById("authMsg");
   msg.className = "ok-msg"; msg.textContent = "";
@@ -575,6 +576,8 @@ function openAuth(){
   var go = document.getElementById("authGo");
   var outWrap = document.getElementById("authOutWrap");
   var note = document.getElementById("authNote");
+  document.getElementById("authCodeWrap").style.display = "none";
+  document.getElementById("authVerify").style.display = "none";
 
   if(!cloudConfigured()){
     document.getElementById("authTitle").textContent = "Sincronización no configurada";
@@ -586,8 +589,9 @@ function openAuth(){
     emailWrap.style.display = "none"; go.style.display = "none"; outWrap.style.display = "flex";
   } else {
     document.getElementById("authTitle").textContent = "Activar sincronización";
-    note.textContent = "Escribe tu correo y te llega un enlace para entrar. No hay contraseña que recordar. Al entrar, tus listas se guardan en la nube y aparecen igual en el celular y en la computadora.";
+    note.textContent = "Escribe tu correo y te llega un código de 6 dígitos. No hay contraseña que recordar. Al entrar, tus listas se guardan en la nube y aparecen igual en el celular y en la computadora.";
     emailWrap.style.display = "block"; go.style.display = "block"; outWrap.style.display = "none";
+    document.getElementById("authEmail").value = pendingEmail;
   }
   auth.classList.add("open");
 }
@@ -604,13 +608,40 @@ document.getElementById("authGo").addEventListener("click", function(){
   }
   if(!sb){ msg.className = "ok-msg show"; msg.textContent = "La nube no está configurada todavía."; return; }
   msg.className = "ok-msg show"; msg.textContent = "Enviando…";
+  pendingEmail = email;
   sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.href.split("#")[0] } })
     .then(function(r){
       if(r && r.error) throw r.error;
-      msg.textContent = "Listo: revisa tu correo y toca el enlace desde este mismo dispositivo.";
+      msg.textContent = "Revisa tu correo: escribe aquí el código de 6 dígitos (o toca el enlace si abres desde el navegador).";
+      document.getElementById("authCodeWrap").style.display = "block";
+      document.getElementById("authVerify").style.display = "block";
+      document.getElementById("authGo").textContent = "Reenviar";
+      setTimeout(function(){ document.getElementById("authCode").focus(); }, 80);
     })["catch"](function(err){
       msg.textContent = "No se pudo enviar: " + ((err && err.message) || "revisa tu conexión");
     });
+});
+function verifyCode(){
+  var msg = document.getElementById("authMsg");
+  var code = document.getElementById("authCode").value.replace(/\D/g,"");
+  if(code.length < 6){ msg.className = "ok-msg show"; msg.textContent = "El código son 6 dígitos."; return; }
+  if(!sb) return;
+  msg.className = "ok-msg show"; msg.textContent = "Entrando…";
+  sb.auth.verifyOtp({ email: pendingEmail, token: code, type: "email" }).then(function(r){
+    if(r && r.error) throw r.error;
+    session = (r && r.data && r.data.session) || session;
+    cloudReady = !!session;
+    msg.textContent = "¡Listo! Sincronización activada.";
+    paintAuth();
+    syncNow();
+    setTimeout(closeAuth, 900);
+  })["catch"](function(err){
+    msg.textContent = "Ese código no sirvió: " + ((err && err.message) || "vuelve a intentar");
+  });
+}
+document.getElementById("authVerify").addEventListener("click", verifyCode);
+document.getElementById("authCode").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); verifyCode(); }
 });
 document.getElementById("authOut").addEventListener("click", function(){
   if(!sb) return;
