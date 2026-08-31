@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pendientes</title>
+<meta name="description" content="Control mensual de pagos y cobros pendientes.">
+<meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eceff3" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pendientes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="toprow">
+      <h1>Pendientes</h1>
+      <button class="iconbtn" id="btnEdit" title="Editar listas" aria-label="Editar listas">✎</button>
+      <button class="iconbtn" id="btnTheme" title="Cambiar tema" aria-label="Cambiar tema">◐</button>
+      <button class="iconbtn" id="btnMenu" title="Más opciones" aria-label="Más opciones">⋯</button>
+    </div>
+    <div class="monthbar">
+      <button class="iconbtn" id="prev" aria-label="Mes anterior">‹</button>
+      <div class="monthname" id="monthName">—</div>
+      <button class="iconbtn" id="next" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="meter"><i id="barFill"></i></div>
+    <div class="meterlbl">
+      <span id="barText">Cargando…</span>
+      <span><span id="barPct"></span><span class="savepill" id="saveDot">…</span></span>
+    </div>
+    <div class="authbar">
+      <span class="who" id="who">Solo en este dispositivo</span>
+      <button class="linkbtn" id="btnAuth">Activar sincronización</button>
+    </div>
+  </header>
+
+  <div class="offline" id="offlineBar">Sin conexión — tus cambios se guardan aquí y se sincronizan al volver la señal.</div>
+  <div class="warnbar" id="warnbar"></div>
+  <main id="app"></main>
+  <button class="btn wide" id="btnNewSec">+ Nueva lista</button>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--idle)"></i>Pendiente</span>
+    <span><i class="dot" style="background:var(--ok)"></i>Hecho</span>
+    <span><i class="dot" style="background:var(--mid)"></i>En proceso</span>
+    <span><i class="dot" style="background:var(--late)"></i>Atrasado</span>
+  </div>
+  <p class="hint">Toca una fila para cambiar su color. Cada mes empieza limpio y lo marcado en meses anteriores queda guardado. Usa ✎ para renombrar, reordenar o borrar.</p>
+  <p class="installhint" id="installHint"></p>
+</div>
+
+<!-- Menú -->
+<div class="overlay" id="menu">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Opciones</h2>
+    <button class="menuitem" id="mCopy">Copiar marcas del mes anterior</button>
+    <button class="menuitem" id="mExport">Exportar respaldo (.json)</button>
+    <button class="menuitem" id="mImport">Importar respaldo (.json)</button>
+    <button class="menuitem" id="mSync">Sincronizar ahora</button>
+    <button class="menuitem red" id="mClear">Limpiar marcas de este mes</button>
+    <button class="menuitem" id="mClose">Cancelar</button>
+    <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
+  </div>
+</div>
+
+<!-- Editor de listas / pendientes -->
+<div class="overlay" id="editor">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2 id="edTitle">Editar</h2>
+    <label class="field"><span id="edNameLbl">Nombre</span><input type="text" id="edName" autocomplete="off"></label>
+    <div id="edItemFields">
+      <label class="field"><span>Nota (opcional)</span><input type="text" id="edNote" autocomplete="off"></label>
+      <label class="field"><span>Día límite del mes (opcional)</span><input type="number" id="edDay" min="1" max="31" inputmode="numeric"></label>
+    </div>
+    <label class="field" id="edKindWrap"><span>Tipo de lista</span>
+      <select id="edKind">
+        <option value="pago">Pagos</option>
+        <option value="cobro">Cobros (me deben)</option>
+        <option value="otro">Otro</option>
+      </select>
+    </label>
+    <div class="sheetbtns">
+      <button class="btn" id="edCancel">Cancelar</button>
+      <button class="btn primary" id="edSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cuenta / sincronización -->
+<div class="overlay" id="auth">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2 id="authTitle">Sincronización</h2>
+    <div class="ok-msg" id="authMsg"></div>
+    <p class="note" id="authNote">Escribe tu correo y te llega un enlace para entrar. No hay contraseña que recordar. Al entrar, tus listas se guardan en la nube y aparecen igual en el celular y en la computadora.</p>
+    <label class="field" id="authEmailWrap"><span>Tu correo</span><input type="email" id="authEmail" autocomplete="email" inputmode="email" placeholder="tucorreo@ejemplo.com"></label>
+    <div class="sheetbtns">
+      <button class="btn" id="authCancel">Cerrar</button>
+      <button class="btn primary" id="authGo">Enviarme el enlace</button>
+    </div>
+    <div class="sheetbtns" id="authOutWrap" style="display:none">
+      <button class="btn" id="authOut">Cerrar sesión en este dispositivo</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>
