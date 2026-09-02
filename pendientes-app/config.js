@@ -15,6 +15,6 @@
    ========================================================= */
 
 window.APP_CONFIG = {
-  SUPABASE_URL: "https://qjvexkcbzhzsomgyglyj.supabase.co/rest/v1/",
+  SUPABASE_URL: "https://qjvexkcbzhzsomgyglyj.supabase.co",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqdmV4a2Niemh6c29tZ3lnbHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyMDc2NjIsImV4cCI6MjEwMzc4MzY2Mn0.CnlBJyleMtSWyYrZv3CIjOj_xEmqAcyAS7IbN0OGNB8"
 };
