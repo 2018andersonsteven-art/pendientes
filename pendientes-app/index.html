@@ -106,11 +106,13 @@
     <div class="ok-msg" id="authMsg"></div>
     <p class="note" id="authNote">Escribe tu correo y te llega un enlace para entrar. No hay contraseña que recordar. Al entrar, tus listas se guardan en la nube y aparecen igual en el celular y en la computadora.</p>
     <label class="field" id="authEmailWrap"><span>Tu correo</span><input type="email" id="authEmail" autocomplete="email" inputmode="email" placeholder="tucorreo@ejemplo.com"></label>
-    <label class="field" id="authCodeWrap" style="display:none"><span>Código de 6 dígitos que te llegó al correo</span><input type="text" id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"></label>
+    <label class="field" id="authPassWrap"><span>Contraseña (mínimo 6 caracteres)</span><input type="password" id="authPass" autocomplete="current-password"></label>
     <div class="sheetbtns">
       <button class="btn" id="authCancel">Cerrar</button>
-      <button class="btn primary" id="authGo">Enviarme el código</button>
-      <button class="btn primary" id="authVerify" style="display:none">Entrar</button>
+      <button class="btn primary" id="authGo">Entrar</button>
+    </div>
+    <div class="sheetbtns" id="authSignupWrap">
+      <button class="btn" id="authSignup">Es mi primera vez: crear cuenta</button>
     </div>
     <div class="sheetbtns" id="authOutWrap" style="display:none">
       <button class="btn" id="authOut">Cerrar sesión en este dispositivo</button>

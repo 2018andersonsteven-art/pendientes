@@ -568,30 +568,31 @@ document.getElementById("fileIn").addEventListener("change", function(e){
 
 /* ============ cuenta ============ */
 var auth = document.getElementById("auth");
-var pendingEmail = "";
 function openAuth(){
   var msg = document.getElementById("authMsg");
   msg.className = "ok-msg"; msg.textContent = "";
   var emailWrap = document.getElementById("authEmailWrap");
+  var passWrap = document.getElementById("authPassWrap");
   var go = document.getElementById("authGo");
+  var signupWrap = document.getElementById("authSignupWrap");
   var outWrap = document.getElementById("authOutWrap");
   var note = document.getElementById("authNote");
-  document.getElementById("authCodeWrap").style.display = "none";
-  document.getElementById("authVerify").style.display = "none";
 
   if(!cloudConfigured()){
     document.getElementById("authTitle").textContent = "Sincronización no configurada";
-    note.textContent = "Esta copia guarda todo en el dispositivo donde la abres. Para que el celular y la computadora vean lo mismo, hay que pegar los datos de un proyecto gratuito de Supabase en el archivo config.js. Está explicado paso a paso en el README.";
-    emailWrap.style.display = "none"; go.style.display = "none"; outWrap.style.display = "none";
+    note.textContent = "Esta copia guarda todo en el dispositivo donde la abres. Para que el celular y la computadora vean lo mismo, hay que pegar los datos de un proyecto gratuito de Supabase en el archivo config.js.";
+    emailWrap.style.display = "none"; passWrap.style.display = "none";
+    go.style.display = "none"; signupWrap.style.display = "none"; outWrap.style.display = "none";
   } else if(session && session.user){
     document.getElementById("authTitle").textContent = "Tu cuenta";
     note.textContent = "Estás dentro como " + session.user.email + ". Tus listas se sincronizan solas entre tus dispositivos.";
-    emailWrap.style.display = "none"; go.style.display = "none"; outWrap.style.display = "flex";
+    emailWrap.style.display = "none"; passWrap.style.display = "none";
+    go.style.display = "none"; signupWrap.style.display = "none"; outWrap.style.display = "flex";
   } else {
     document.getElementById("authTitle").textContent = "Activar sincronización";
-    note.textContent = "Escribe tu correo y te llega un código de 6 dígitos. No hay contraseña que recordar. Al entrar, tus listas se guardan en la nube y aparecen igual en el celular y en la computadora.";
-    emailWrap.style.display = "block"; go.style.display = "block"; outWrap.style.display = "none";
-    document.getElementById("authEmail").value = pendingEmail;
+    note.textContent = "Usa el mismo correo y la misma contraseña en el celular y en la computadora: así los dos ven las mismas listas. La primera vez toca “crear cuenta”.";
+    emailWrap.style.display = "block"; passWrap.style.display = "block";
+    go.style.display = "block"; signupWrap.style.display = "flex"; outWrap.style.display = "none";
   }
   auth.classList.add("open");
 }
@@ -599,49 +600,60 @@ function closeAuth(){ auth.classList.remove("open"); }
 document.getElementById("btnAuth").addEventListener("click", openAuth);
 document.getElementById("authCancel").addEventListener("click", closeAuth);
 auth.addEventListener("click", function(e){ if(e.target === auth) closeAuth(); });
-document.getElementById("authGo").addEventListener("click", function(){
-  var email = document.getElementById("authEmail").value.trim();
+
+function credenciales(){
   var msg = document.getElementById("authMsg");
+  var email = document.getElementById("authEmail").value.trim();
+  var pass = document.getElementById("authPass").value;
   if(!email || email.indexOf("@") < 0){
-    msg.className = "ok-msg show"; msg.textContent = "Escribe un correo válido.";
+    msg.className = "ok-msg show"; msg.textContent = "Escribe un correo válido."; return null;
+  }
+  if(pass.length < 6){
+    msg.className = "ok-msg show"; msg.textContent = "La contraseña necesita al menos 6 caracteres."; return null;
+  }
+  if(!sb){ msg.className = "ok-msg show"; msg.textContent = "La nube no está configurada todavía."; return null; }
+  return {email:email, pass:pass, msg:msg};
+}
+function entrarOk(r, msg){
+  if(r && r.error) throw r.error;
+  session = (r && r.data && r.data.session) || session;
+  cloudReady = !!session;
+  if(!cloudReady){
+    msg.textContent = "Cuenta creada. Revisa tu correo para confirmarla y vuelve a entrar.";
     return;
   }
-  if(!sb){ msg.className = "ok-msg show"; msg.textContent = "La nube no está configurada todavía."; return; }
-  msg.className = "ok-msg show"; msg.textContent = "Enviando…";
-  pendingEmail = email;
-  sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.href.split("#")[0] } })
-    .then(function(r){
-      if(r && r.error) throw r.error;
-      msg.textContent = "Revisa tu correo: escribe aquí el código de 6 dígitos (o toca el enlace si abres desde el navegador).";
-      document.getElementById("authCodeWrap").style.display = "block";
-      document.getElementById("authVerify").style.display = "block";
-      document.getElementById("authGo").textContent = "Reenviar";
-      setTimeout(function(){ document.getElementById("authCode").focus(); }, 80);
-    })["catch"](function(err){
-      msg.textContent = "No se pudo enviar: " + ((err && err.message) || "revisa tu conexión");
-    });
-});
-function verifyCode(){
-  var msg = document.getElementById("authMsg");
-  var code = document.getElementById("authCode").value.replace(/\D/g,"");
-  if(code.length < 6){ msg.className = "ok-msg show"; msg.textContent = "El código son 6 dígitos."; return; }
-  if(!sb) return;
-  msg.className = "ok-msg show"; msg.textContent = "Entrando…";
-  sb.auth.verifyOtp({ email: pendingEmail, token: code, type: "email" }).then(function(r){
-    if(r && r.error) throw r.error;
-    session = (r && r.data && r.data.session) || session;
-    cloudReady = !!session;
-    msg.textContent = "¡Listo! Sincronización activada.";
-    paintAuth();
-    syncNow();
-    setTimeout(closeAuth, 900);
-  })["catch"](function(err){
-    msg.textContent = "Ese código no sirvió: " + ((err && err.message) || "vuelve a intentar");
-  });
+  msg.textContent = "¡Listo! Sincronización activada.";
+  paintAuth();
+  syncNow();
+  setTimeout(closeAuth, 900);
 }
-document.getElementById("authVerify").addEventListener("click", verifyCode);
-document.getElementById("authCode").addEventListener("keydown", function(e){
-  if(e.key === "Enter"){ e.preventDefault(); verifyCode(); }
+function traducirError(err){
+  var m = (err && err.message) || "";
+  if(/Invalid login credentials/i.test(m)) return "Correo o contraseña incorrectos. Si es tu primera vez, toca “crear cuenta”.";
+  if(/User already registered/i.test(m)) return "Ese correo ya tiene cuenta. Toca “Entrar” con tu contraseña.";
+  if(/Password should be/i.test(m)) return "La contraseña necesita al menos 6 caracteres.";
+  if(/Email .*invalid|invalid format/i.test(m)) return "Ese correo no es válido.";
+  if(/rate limit|too many/i.test(m)) return "Demasiados intentos seguidos. Espera un momento.";
+  return m || "No se pudo conectar.";
+}
+document.getElementById("authGo").addEventListener("click", function(){
+  var c = credenciales();
+  if(!c) return;
+  c.msg.className = "ok-msg show"; c.msg.textContent = "Entrando…";
+  sb.auth.signInWithPassword({ email:c.email, password:c.pass })
+    .then(function(r){ entrarOk(r, c.msg); })
+    ["catch"](function(err){ c.msg.textContent = traducirError(err); });
+});
+document.getElementById("authSignup").addEventListener("click", function(){
+  var c = credenciales();
+  if(!c) return;
+  c.msg.className = "ok-msg show"; c.msg.textContent = "Creando cuenta…";
+  sb.auth.signUp({ email:c.email, password:c.pass })
+    .then(function(r){ entrarOk(r, c.msg); })
+    ["catch"](function(err){ c.msg.textContent = traducirError(err); });
+});
+document.getElementById("authPass").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); document.getElementById("authGo").click(); }
 });
 document.getElementById("authOut").addEventListener("click", function(){
   if(!sb) return;
