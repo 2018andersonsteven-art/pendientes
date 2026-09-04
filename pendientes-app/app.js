@@ -192,9 +192,23 @@ function syncNow(){
   if(!cloudReady){ idlePill(); return Promise.resolve(); }
   setPill("busy","sincronizando…");
   return pullRemote().then(function(remote){
+    /* Primera vez que ESTE dispositivo se conecta a ESTA cuenta:
+       manda lo que ya está en la nube. Lo local aquí es solo el
+       arranque de fábrica y no debe pisar lo que ya tenías. */
+    var primeraVez = db.cloudUserId !== session.user.id;
+    if(primeraVez){
+      if(remote){
+        db = remote;
+        db.cloudUserId = session.user.id;
+        saveLocal(); render();
+        return;
+      }
+      db.cloudUserId = session.user.id;
+      saveLocal();
+      return pushRemote();
+    }
     if(remote && (remote.updatedAt || 0) > (db.updatedAt || 0)){
       db = remote; saveLocal(); render();
-      idlePill();
       return;
     }
     if(!remote || (db.updatedAt || 0) > (remote.updatedAt || 0)) return pushRemote();
@@ -536,6 +550,52 @@ document.getElementById("mSync").addEventListener("click", function(){
   closeMenu();
   if(!cloudReady){ openAuth(); return; }
   syncNow();
+});
+
+/* Los dos botones de mando manual: piden confirmación tocando dos veces. */
+function dosToques(id, etiqueta, accion){
+  var b = document.getElementById(id);
+  var original = b.textContent;
+  var armado = false, t = null;
+  b.addEventListener("click", function(){
+    if(!cloudReady){ closeMenu(); openAuth(); return; }
+    if(!armado){
+      armado = true;
+      b.textContent = etiqueta;
+      b.style.color = "var(--late)";
+      t = setTimeout(function(){
+        armado = false; b.textContent = original; b.style.color = "";
+      }, 4000);
+      return;
+    }
+    clearTimeout(t);
+    armado = false; b.textContent = original; b.style.color = "";
+    closeMenu();
+    accion();
+  });
+}
+dosToques("mPull", "Toca otra vez para confirmar", function(){
+  setPill("busy","bajando…");
+  pullRemote().then(function(remote){
+    if(!remote){
+      setPill("bad","nada en la nube","Todavía no hay nada guardado en la nube con esta cuenta.");
+      return;
+    }
+    db = remote;
+    db.cloudUserId = session.user.id;
+    saveLocal(); render(); idlePill();
+  })["catch"](function(){
+    setPill("bad","sin conexión","No se pudo leer la nube. Intenta de nuevo cuando haya señal.");
+  });
+});
+dosToques("mPush", "Toca otra vez para confirmar", function(){
+  db.updatedAt = Date.now();
+  db.cloudUserId = session.user.id;
+  saveLocal();
+  setPill("busy","subiendo…");
+  pushRemote().then(function(){ idlePill(); })["catch"](function(){
+    setPill("bad","sin subir","No se pudo subir. Tus datos siguen aquí; intenta otra vez con señal.");
+  });
 });
 document.getElementById("mExport").addEventListener("click", function(){
   var blob = new Blob([JSON.stringify(db, null, 2)], {type:"application/json"});
