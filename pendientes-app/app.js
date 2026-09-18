@@ -81,6 +81,7 @@ function defaults(){
   function it(t,day,note){ return {id:uid(), title:t, day:day||null, note:note||""}; }
   return {
     v:5, updatedAt: Date.now(),
+    bitacora: [], procsExtra: [], bitacoraTitulo: "Extras La Misión",
     sections:[
       {id:uid(), name:"Pagos del mes", kind:"pago", items:[
         it("Pago de cel", null, "Automático de tarjeta"),
@@ -109,11 +110,23 @@ function defaults(){
     marks:{}
   };
 }
+/* Procedimientos que salen como botones al registrar un extra.
+   Los que el usuario teclee se guardan en db.procsExtra y se suman a estos. */
+var PROCS_BASE = ["INGRESO","HEMATOLOGÍA","ORINA","FT","DENGUE","EMERGENCIA",
+                  "AYUDANTÍA EN SALA","SUTURAS","RETIRO DE YESO"];
+
 function normalize(d){
   if(!d || !Object.prototype.toString.call(d.sections).match(/Array/)) return null;
   if(!d.marks) d.marks = {};
   if(!d.updatedAt) d.updatedAt = 0;
+  // Campos nuevos: los respaldos viejos no los traen y se crean vacíos.
+  if(!d.bitacora) d.bitacora = [];
+  if(!d.procsExtra) d.procsExtra = [];
+  if(!d.bitacoraTitulo) d.bitacoraTitulo = "Extras La Misión";
   return d;
+}
+function listaProcs(){
+  return PROCS_BASE.concat((db && db.procsExtra) || []);
 }
 
 /* ============ indicador de guardado ============ */
@@ -439,7 +452,166 @@ function render(){
 
   flashId = null;
   refreshCounts();
+  renderBitacora();
 }
+
+/* ============ bitácora de extras ============
+   Es un registro, no una lista de pendientes: no se marca como hecho,
+   no cuenta en la barra de progreso y NO entra al calendario —
+   construirIcs solo recorre db.sections, y la bitácora vive aparte. */
+function extrasDelMes(){
+  var clave = mkey();
+  return (db.bitacora || [])
+    .filter(function(e){ return (e.fecha || "").slice(0,7) === clave; })
+    .sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+}
+function renderBitacora(){
+  var cont = document.getElementById("bitacora");
+  cont.innerHTML = "";
+  if(!db) return;
+
+  var card = mk("div","card");
+  var head = mk("div","sechead");
+  if(editMode){
+    var nombreIn = mk("input","secname");
+    nombreIn.value = db.bitacoraTitulo;
+    nombreIn.addEventListener("input", function(){ db.bitacoraTitulo = nombreIn.value; save(); });
+    head.appendChild(nombreIn);
+  } else {
+    head.appendChild(mk("h2","secname", db.bitacoraTitulo));
+  }
+  var lista = extrasDelMes();
+  head.appendChild(mk("div","seccount", String(lista.length)));
+  card.appendChild(head);
+
+  if(lista.length === 0){
+    card.appendChild(mk("div","vacio","Sin extras registrados en " + MESES[view.m] + "."));
+  }
+  lista.forEach(function(e){
+    var fila = mk("div","extra");
+    var p = e.fecha.split("-");
+    var caja = mk("div","fecha-caja");
+    caja.appendChild(mk("b", null, String(parseInt(p[2],10))));
+    caja.appendChild(mk("span", null, MES_CORTO[parseInt(p[1],10)-1]));
+    fila.appendChild(caja);
+
+    var quien = mk("div","quien");
+    quien.appendChild(mk("div","nombre", e.nombre));
+    if(e.nota) quien.appendChild(mk("div","nota-extra", e.nota));
+    var procs = mk("div","procs");
+    (e.procs || []).forEach(function(x){ procs.appendChild(mk("span","pill", x)); });
+    quien.appendChild(procs);
+    fila.appendChild(quien);
+
+    if(editMode){
+      var rt = mk("div","rowtools");
+      rt.appendChild(delBtn("ex-"+e.id, function(){
+        db.bitacora = db.bitacora.filter(function(x){ return x.id !== e.id; });
+        save(); render();
+      }));
+      fila.appendChild(rt);
+    } else {
+      fila.addEventListener("click", function(){ abrirExtra(e); });
+    }
+    card.appendChild(fila);
+  });
+
+  var add = mk("div","addrow","+ Agregar extra");
+  add.addEventListener("click", function(){ abrirExtra(null); });
+  card.appendChild(add);
+  cont.appendChild(card);
+}
+
+var hojaExtra = document.getElementById("extra");
+var exEditando = null, exSeleccion = [];
+
+function pintarChips(){
+  var cont = document.getElementById("exChips");
+  cont.innerHTML = "";
+  listaProcs().forEach(function(p){
+    var b = mk("button","chip" + (exSeleccion.indexOf(p) >= 0 ? " on" : ""), p);
+    b.addEventListener("click", function(){
+      var i = exSeleccion.indexOf(p);
+      if(i >= 0) exSeleccion.splice(i,1); else exSeleccion.push(p);
+      pintarChips();
+    });
+    cont.appendChild(b);
+  });
+}
+function hoyTexto(){
+  var n = new Date();
+  return n.getFullYear() + "-" + String(n.getMonth()+1).padStart(2,"0") + "-" + String(n.getDate()).padStart(2,"0");
+}
+function abrirExtra(entrada){
+  exEditando = entrada;
+  exSeleccion = entrada ? (entrada.procs || []).slice() : [];
+  document.getElementById("exTitulo").textContent = entrada ? "Editar extra" : "Nuevo extra";
+  document.getElementById("exMsg").className = "ok-msg";
+  document.getElementById("exMsg").textContent = "";
+  document.getElementById("exNombre").value = entrada ? entrada.nombre : "";
+  // Si estás viendo otro mes, la fecha arranca en el día 1 de ese mes;
+  // si estás en el mes actual, arranca hoy. Evita registrar en el mes equivocado.
+  var porDefecto = (view.y === today.getFullYear() && view.m === today.getMonth())
+    ? hoyTexto()
+    : view.y + "-" + String(view.m+1).padStart(2,"0") + "-01";
+  document.getElementById("exFecha").value = entrada ? entrada.fecha : porDefecto;
+  document.getElementById("exNota").value = entrada ? (entrada.nota || "") : "";
+  document.getElementById("exOtro").value = "";
+  document.getElementById("exBorrarWrap").style.display = entrada ? "flex" : "none";
+  pintarChips();
+  hojaExtra.classList.add("open");
+  setTimeout(function(){ document.getElementById("exNombre").focus(); }, 60);
+}
+function cerrarExtra(){ hojaExtra.classList.remove("open"); exEditando = null; }
+document.getElementById("exCancel").addEventListener("click", cerrarExtra);
+hojaExtra.addEventListener("click", function(e){ if(e.target === hojaExtra) cerrarExtra(); });
+
+document.getElementById("exAddOtro").addEventListener("click", function(){
+  var v = document.getElementById("exOtro").value.trim().toUpperCase();
+  if(!v) return;
+  if(listaProcs().indexOf(v) < 0){ db.procsExtra.push(v); save(); }
+  if(exSeleccion.indexOf(v) < 0) exSeleccion.push(v);
+  document.getElementById("exOtro").value = "";
+  pintarChips();
+});
+document.getElementById("exOtro").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); document.getElementById("exAddOtro").click(); }
+});
+
+document.getElementById("exSave").addEventListener("click", function(){
+  var msg = document.getElementById("exMsg");
+  var nombre = document.getElementById("exNombre").value.trim();
+  var fecha = document.getElementById("exFecha").value;
+  if(!nombre){ msg.className = "ok-msg show"; msg.textContent = "Falta el nombre."; return; }
+  if(!fecha){ msg.className = "ok-msg show"; msg.textContent = "Falta la fecha."; return; }
+  if(exSeleccion.length === 0){ msg.className = "ok-msg show"; msg.textContent = "Marca al menos un procedimiento."; return; }
+
+  if(exEditando){
+    exEditando.nombre = nombre;
+    exEditando.fecha = fecha;
+    exEditando.procs = exSeleccion.slice();
+    exEditando.nota = document.getElementById("exNota").value.trim();
+  } else {
+    db.bitacora.push({
+      id: uid(), nombre: nombre, fecha: fecha,
+      procs: exSeleccion.slice(),
+      nota: document.getElementById("exNota").value.trim()
+    });
+    buzz(12);
+  }
+  cerrarExtra();
+  save();
+  // Si registraste en otro mes, salta a ese mes para que lo veas.
+  var p = fecha.split("-");
+  view.y = parseInt(p[0],10); view.m = parseInt(p[1],10) - 1;
+  render();
+});
+document.getElementById("exBorrar").addEventListener("click", function(){
+  if(!exEditando) return;
+  var id = exEditando.id;
+  db.bitacora = db.bitacora.filter(function(x){ return x.id !== id; });
+  cerrarExtra(); save(); render();
+});
 
 /* ============ editor ============ */
 var editor = document.getElementById("editor");

@@ -47,6 +47,7 @@
   <div class="offline" id="offlineBar">Sin conexión — tus cambios se guardan aquí y se sincronizan al volver la señal.</div>
   <div class="warnbar" id="warnbar"></div>
   <main id="app"></main>
+  <section id="bitacora"></section>
   <button class="btn wide" id="btnNewSec">+ Nueva lista</button>
 
   <div class="legend">
@@ -107,6 +108,33 @@
     <div class="sheetbtns">
       <button class="btn" id="edCancel">Cancelar</button>
       <button class="btn primary" id="edSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bitácora: registrar un extra -->
+<div class="overlay" id="extra">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2 id="exTitulo">Nuevo extra</h2>
+    <div class="ok-msg" id="exMsg"></div>
+    <label class="field"><span>Nombre y apellido</span><input type="text" id="exNombre" autocomplete="off"></label>
+    <label class="field"><span>Fecha</span><input type="date" id="exFecha"></label>
+    <div class="field">
+      <span>Procedimientos (puedes marcar varios)</span>
+      <div class="chips" id="exChips"></div>
+      <div class="otro">
+        <input type="text" id="exOtro" placeholder="Otro procedimiento…" autocomplete="off">
+        <button class="btn" id="exAddOtro">Agregar</button>
+      </div>
+    </div>
+    <label class="field"><span>Nota (opcional)</span><input type="text" id="exNota" autocomplete="off" placeholder="Cama, servicio, quién lo pidió…"></label>
+    <div class="sheetbtns">
+      <button class="btn" id="exCancel">Cancelar</button>
+      <button class="btn primary" id="exSave">Guardar</button>
+    </div>
+    <div class="sheetbtns" id="exBorrarWrap" style="display:none">
+      <button class="btn" id="exBorrar">Borrar este extra</button>
     </div>
   </div>
 </div>
