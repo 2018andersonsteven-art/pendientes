@@ -219,3 +219,15 @@
   .otro{display:flex;gap:8px;margin-top:10px}
   .otro input{flex:1;font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--line);
     border-radius:10px;background:var(--bg);color:var(--ink)}
+
+  /* ===================== aviso de "hoy" dentro de la app ===================== */
+  #avisos:empty{display:none}
+  .aviso-caja{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--mid);
+    border-radius:12px;padding:12px 14px;margin-top:12px;box-shadow:var(--shadow);cursor:pointer}
+  .aviso-caja.urgente{border-left-color:var(--late)}
+  .aviso-tit{font-family:"Archivo",sans-serif;font-size:12px;font-weight:700;letter-spacing:.8px;
+    text-transform:uppercase;color:var(--mid);margin-bottom:6px}
+  .aviso-caja.urgente .aviso-tit{color:var(--late)}
+  .aviso-linea{font-size:14.5px;line-height:1.5}
+  .aviso-linea + .aviso-linea{margin-top:3px}
+  .aviso-hora{color:var(--muted);font-size:12.5px}

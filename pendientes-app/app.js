@@ -452,7 +452,67 @@ function render(){
 
   flashId = null;
   refreshCounts();
+  renderAvisos();
   renderBitacora();
+}
+
+/* ============ aviso de hoy, dentro de la app ============
+   Recorre TODOS los pendientes (no solo los del mes que estés viendo)
+   y arma dos grupos: lo que vence hoy y lo que ya se pasó de fecha
+   este mes y sigue sin marcarse. Si no hay nada, no se dibuja nada:
+   una caja vacía sería ruido. */
+function avisosDeHoy(){
+  var hoy = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  var claveMes = today.getFullYear() + "-" + String(today.getMonth()+1).padStart(2,"0");
+  var marcasMes = (db.marks && db.marks[claveMes]) || {};
+  var hoyLista = [], vencidos = [];
+
+  (db.sections || []).forEach(function(sec){
+    (sec.items || []).forEach(function(item){
+      if(marcasMes[item.id] === 1) return;           // ya lo hiciste este mes
+      var cuando = null;
+      if(item.date) cuando = fechaDe(item.date);
+      else if(item.day) cuando = new Date(today.getFullYear(), today.getMonth(),
+                                          Math.min(item.day, new Date(today.getFullYear(), today.getMonth()+1, 0).getDate()));
+      if(!cuando) return;
+      var dif = Math.round((cuando - hoy) / 86400000);
+      if(dif === 0) hoyLista.push(item);
+      else if(dif < 0 && cuando.getMonth() === today.getMonth() && cuando.getFullYear() === today.getFullYear()){
+        vencidos.push(item);
+      }
+    });
+  });
+  return { hoy: hoyLista, vencidos: vencidos };
+}
+function renderAvisos(){
+  var cont = document.getElementById("avisos");
+  cont.innerHTML = "";
+  if(!db) return;
+  var a = avisosDeHoy();
+  if(a.hoy.length === 0 && a.vencidos.length === 0) return;
+
+  function caja(titulo, items, urgente){
+    var c = mk("div","aviso-caja" + (urgente ? " urgente" : ""));
+    c.appendChild(mk("div","aviso-tit", titulo));
+    items.forEach(function(item){
+      var l = mk("div","aviso-linea");
+      l.appendChild(document.createTextNode("• " + item.title));
+      if(item.time) l.appendChild(mk("span","aviso-hora", "  " + horaLegible(item.time)));
+      c.appendChild(l);
+    });
+    // Tocar el aviso te lleva al mes actual, que es donde puedes marcarlos.
+    c.addEventListener("click", function(){
+      var n = new Date();
+      if(view.y !== n.getFullYear() || view.m !== n.getMonth()){
+        view.y = n.getFullYear(); view.m = n.getMonth(); render();
+      }
+      window.scrollTo({ top: 0, behavior: REDUCE ? "auto" : "smooth" });
+    });
+    cont.appendChild(c);
+  }
+
+  if(a.vencidos.length) caja("Se pasó la fecha", a.vencidos, true);
+  if(a.hoy.length) caja("Para hoy", a.hoy, false);
 }
 
 /* ============ bitácora de extras ============
