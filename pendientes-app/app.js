@@ -275,12 +275,41 @@ function move(arr, i, d){
   if(j < 0 || j >= arr.length) return;
   var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
 }
+var MES_CORTO = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+/* "2026-09-24" -> Date local, sin que el navegador lo interprete como UTC */
+function fechaDe(txt){
+  var p = String(txt).split("-");
+  return new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+}
+function horaLegible(hhmm){
+  var p = String(hhmm).split(":");
+  var h = parseInt(p[0],10), m = p[1];
+  var suf = h >= 12 ? "PM" : "AM";
+  var h12 = h % 12; if(h12 === 0) h12 = 12;
+  return h12 + ":" + m + " " + suf;
+}
+function etiquetaFecha(item){
+  var d = fechaDe(item.date);
+  var txt = d.getDate() + " " + MES_CORTO[d.getMonth()];
+  if(d.getFullYear() !== today.getFullYear()) txt += " " + d.getFullYear();
+  if(item.time) txt += " · " + horaLegible(item.time);
+  return txt;
+}
 function dueInfo(item, st){
-  if(!item.day || st === 1) return null;
-  if(view.y !== today.getFullYear() || view.m !== today.getMonth()) return null;
-  var diff = item.day - today.getDate();
+  if(st === 1) return null;
+  var diff;
+  if(item.date){
+    // Los de fecha exacta se miden contra hoy, sin importar qué mes estés viendo.
+    var hoy = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    diff = Math.round((fechaDe(item.date) - hoy) / 86400000);
+  } else if(item.day){
+    // Los mensuales solo tienen sentido en el mes actual.
+    if(view.y !== today.getFullYear() || view.m !== today.getMonth()) return null;
+    diff = item.day - today.getDate();
+  } else return null;
+
   if(diff < 0) return {cls:"late", txt:"ya venció"};
-  if(diff === 0) return {cls:"late", txt:"vence hoy"};
+  if(diff === 0) return {cls:"late", txt:"es hoy"};
   if(diff <= 3) return {cls:"soon", txt:"faltan " + diff + " día" + (diff>1?"s":"")};
   return null;
 }
@@ -288,7 +317,8 @@ function dueInfo(item, st){
 function fillMeta(meta, item, st){
   if(!meta) return;
   meta.innerHTML = "";
-  if(item.day) meta.appendChild(mk("span","pill","antes del " + item.day));
+  if(item.date) meta.appendChild(mk("span","pill", etiquetaFecha(item)));
+  else if(item.day) meta.appendChild(mk("span","pill","antes del " + item.day));
   if(item.note) meta.appendChild(mk("span",null,item.note));
   var due = dueInfo(item, st);
   if(due) meta.appendChild(mk("span","pill " + due.cls, due.txt));
@@ -416,6 +446,22 @@ var editor = document.getElementById("editor");
 var edMode = "item", edSec = null, edItem = null;
 function openEditor(){ editor.classList.add("open"); setTimeout(function(){ document.getElementById("edName").focus(); }, 60); }
 function closeEditor(){ editor.classList.remove("open"); edSec = null; edItem = null; }
+/* Un pendiente puede ser: sin fecha, mensual (día fijo) o de fecha exacta.
+   Nunca los dos últimos a la vez: al guardar se limpia el que no aplica. */
+function tipoDe(item){
+  if(!item) return "ninguno";
+  if(item.date) return "fecha";
+  if(item.day) return "mensual";
+  return "ninguno";
+}
+function pintarCamposFecha(){
+  var t = document.getElementById("edTipo").value;
+  document.getElementById("edDayWrap").style.display  = (t === "mensual") ? "block" : "none";
+  document.getElementById("edDateWrap").style.display = (t === "fecha")   ? "block" : "none";
+  document.getElementById("edTimeWrap").style.display = (t === "fecha")   ? "block" : "none";
+}
+document.getElementById("edTipo").addEventListener("change", pintarCamposFecha);
+
 function openItemEditor(sec, item){
   edMode = "item"; edSec = sec; edItem = item;
   document.getElementById("edTitle").textContent = item ? "Editar pendiente" : "Nuevo pendiente";
@@ -424,7 +470,11 @@ function openItemEditor(sec, item){
   document.getElementById("edKindWrap").style.display = "none";
   document.getElementById("edName").value = item ? item.title : "";
   document.getElementById("edNote").value = item ? (item.note || "") : "";
-  document.getElementById("edDay").value = item && item.day ? item.day : "";
+  document.getElementById("edTipo").value = tipoDe(item);
+  document.getElementById("edDay").value  = (item && item.day)  ? item.day  : "";
+  document.getElementById("edDate").value = (item && item.date) ? item.date : "";
+  document.getElementById("edTime").value = (item && item.time) ? item.time : "";
+  pintarCamposFecha();
   openEditor();
 }
 function openSectionEditor(sec){
@@ -447,11 +497,17 @@ document.getElementById("edSave").addEventListener("click", function(){
   if(!name){ closeEditor(); return; }
   if(edMode === "item"){
     var note = document.getElementById("edNote").value.trim();
+    var tipo = document.getElementById("edTipo").value;
     var dayRaw = parseInt(document.getElementById("edDay").value,10);
-    var day = (dayRaw >= 1 && dayRaw <= 31) ? dayRaw : null;
-    if(edItem){ edItem.title = name; edItem.note = note; edItem.day = day; flashId = edItem.id; }
-    else {
-      var nuevo = {id:uid(), title:name, note:note, day:day};
+    var day  = (tipo === "mensual" && dayRaw >= 1 && dayRaw <= 31) ? dayRaw : null;
+    var date = (tipo === "fecha") ? (document.getElementById("edDate").value || null) : null;
+    var time = (tipo === "fecha") ? (document.getElementById("edTime").value || null) : null;
+    if(edItem){
+      edItem.title = name; edItem.note = note;
+      edItem.day = day; edItem.date = date; edItem.time = time;
+      flashId = edItem.id;
+    } else {
+      var nuevo = {id:uid(), title:name, note:note, day:day, date:date, time:time};
       edSec.items.push(nuevo);
       flashId = nuevo.id;
       buzz(12);
@@ -606,6 +662,240 @@ document.getElementById("mExport").addEventListener("click", function(){
   setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
   closeMenu();
 });
+/* ============ calendario (.ics) ============
+   Reglas acordadas:
+   - Solo se generan eventos del mes actual y del siguiente. Nada de series
+     infinitas: el calendario se rehace cada vez que se lee, así no se satura.
+   - Mensual (día fijo): un evento por cada mes de esa ventana.
+   - Fecha exacta: un solo evento, sin repetición. Cuando pasa, ya no vuelve.
+   - Lo que ya marcaste como hecho ese mes NO genera evento.
+   - Avisos: el día anterior 8:00 PM, el mismo día 8:00 AM y —si tiene hora—
+     una hora antes.
+   Guatemala es UTC-6 todo el año (no hay horario de verano), por eso las
+   alarmas se calculan sumando 6 horas para expresarlas en UTC. */
+var TZ_OFFSET_HORAS = 6;
+
+function icsEscape(t){
+  return String(t).replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+}
+function icsFold(linea){
+  // El formato iCalendar exige cortar las líneas largas a 75 caracteres.
+  if(linea.length <= 74) return linea;
+  var out = linea.slice(0,74), resto = linea.slice(74);
+  while(resto.length > 73){ out += "\r\n " + resto.slice(0,73); resto = resto.slice(73); }
+  return out + "\r\n " + resto;
+}
+function dosDigitos(n){ return String(n).padStart(2,"0"); }
+function icsFecha(d){ return d.getFullYear() + dosDigitos(d.getMonth()+1) + dosDigitos(d.getDate()); }
+function icsLocal(d){
+  return icsFecha(d) + "T" + dosDigitos(d.getHours()) + dosDigitos(d.getMinutes()) + "00";
+}
+/* Convierte un instante local de Guatemala a la cadena UTC que pide el formato. */
+function icsUtcDesdeLocal(d){
+  var u = new Date(d.getTime() + TZ_OFFSET_HORAS*3600000);
+  return u.getUTCFullYear() + dosDigitos(u.getUTCMonth()+1) + dosDigitos(u.getUTCDate()) +
+    "T" + dosDigitos(u.getUTCHours()) + dosDigitos(u.getUTCMinutes()) + "00Z";
+}
+function ultimoDiaMes(y, m){ return new Date(y, m+1, 0).getDate(); }
+
+/* Devuelve las líneas VALARM de un evento.
+   inicio = instante local en que arranca (medianoche si es de día completo). */
+function alarmas(inicio, titulo, tieneHora){
+  var L = [];
+  function alarma(cuando, texto){
+    L.push("BEGIN:VALARM","ACTION:DISPLAY",
+           "TRIGGER;VALUE=DATE-TIME:" + icsUtcDesdeLocal(cuando),
+           "DESCRIPTION:" + icsEscape(texto), "END:VALARM");
+  }
+  var diaAnterior = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate()-1, 20, 0, 0);
+  var mismoDia    = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate(), 8, 0, 0);
+  alarma(diaAnterior, "Mañana: " + titulo);
+  if(!tieneHora || inicio.getHours() > 9) alarma(mismoDia, "Hoy: " + titulo);
+  if(tieneHora) alarma(new Date(inicio.getTime() - 3600000), "En 1 hora: " + titulo);
+  return L;
+}
+
+/* Arma el calendario completo. Recibe el estado y la fecha de referencia
+   (parámetro aparte para poder probarlo con fechas fijas). */
+function construirIcs(estado, ahora){
+  estado = estado || db;
+  ahora = ahora || new Date();
+  var hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  var desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  var hasta = new Date(ahora.getFullYear(), ahora.getMonth()+2, 0); // último día del mes siguiente
+
+  var sello = icsUtcDesdeLocal(ahora);
+  var L = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Pendientes//ES","CALSCALE:GREGORIAN","METHOD:PUBLISH",
+           "X-WR-CALNAME:Pendientes","X-WR-TIMEZONE:America/Guatemala",
+           "X-PUBLISHED-TTL:PT1H","REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+           "BEGIN:VTIMEZONE","TZID:America/Guatemala","BEGIN:STANDARD",
+           "DTSTART:19700101T000000","TZOFFSETFROM:-0600","TZOFFSETTO:-0600","TZNAME:CST",
+           "END:STANDARD","END:VTIMEZONE"];
+  var cuantos = 0;
+
+  function marcado(idItem, y, m){
+    var clave = y + "-" + dosDigitos(m+1);
+    var mm = estado.marks && estado.marks[clave];
+    return !!(mm && mm[idItem] === 1);
+  }
+
+  function evento(item, sec, inicioLocal, uid){
+    var tieneHora = !!item.time;
+    var titulo = item.title + (sec.kind === "cobro" ? " (cobrar)" : "");
+    var detalle = "Lista: " + sec.name + (item.note ? " — " + item.note : "");
+    L.push("BEGIN:VEVENT");
+    L.push("UID:" + uid + "@pendientes");
+    L.push("DTSTAMP:" + sello);
+    if(tieneHora){
+      var fin = new Date(inicioLocal.getTime() + 3600000);
+      L.push("DTSTART;TZID=America/Guatemala:" + icsLocal(inicioLocal));
+      L.push("DTEND;TZID=America/Guatemala:" + icsLocal(fin));
+    } else {
+      var finDia = new Date(inicioLocal.getFullYear(), inicioLocal.getMonth(), inicioLocal.getDate()+1);
+      L.push("DTSTART;VALUE=DATE:" + icsFecha(inicioLocal));
+      L.push("DTEND;VALUE=DATE:" + icsFecha(finDia));
+    }
+    L.push("SUMMARY:" + icsEscape(titulo));
+    L.push("DESCRIPTION:" + icsEscape(detalle));
+    L.push("TRANSP:TRANSPARENT");
+    alarmas(inicioLocal, titulo, tieneHora).forEach(function(x){ L.push(x); });
+    L.push("END:VEVENT");
+    cuantos++;
+  }
+
+  (estado.sections || []).forEach(function(sec){
+    (sec.items || []).forEach(function(item){
+
+      if(item.date){
+        var f = fechaDe(item.date);
+        if(f < desde || f > hasta) return;               // fuera de la ventana
+        if(marcado(item.id, f.getFullYear(), f.getMonth())) return;  // ya lo hiciste
+        var ini = item.time
+          ? new Date(f.getFullYear(), f.getMonth(), f.getDate(),
+                     parseInt(item.time.split(":")[0],10), parseInt(item.time.split(":")[1],10))
+          : f;
+        evento(item, sec, ini, item.id + "-" + icsFecha(f));
+        return;
+      }
+
+      if(item.day){
+        for(var k = 0; k < 2; k++){
+          var y = ahora.getFullYear(), m = ahora.getMonth() + k;
+          if(m > 11){ m -= 12; y++; }
+          if(marcado(item.id, y, m)) continue;
+          var d = new Date(y, m, Math.min(item.day, ultimoDiaMes(y, m)));
+          if(d < hoy) continue;                          // ya pasó este mes
+          evento(item, sec, d, item.id + "-" + y + dosDigitos(m+1));
+        }
+      }
+    });
+  });
+
+  L.push("END:VCALENDAR");
+  return { texto: L.map(icsFold).join("\r\n") + "\r\n", cuantos: cuantos };
+}
+
+/* Expuesto a propósito: permite auditar el calendario con fechas fijas
+   desde las pruebas, sin depender de qué día se corran. */
+window.__construirIcs = construirIcs;
+
+document.getElementById("mIcs").addEventListener("click", function(){
+  closeMenu();
+  var r = construirIcs(db, new Date());
+  if(r.cuantos === 0){
+    var w = document.getElementById("warnbar");
+    w.style.display = "block";
+    w.textContent = "No hay nada con fecha pendiente en este mes ni en el siguiente. Ponles fecha con ✎ y vuelve a intentar.";
+    return;
+  }
+  var blob = new Blob([r.texto], {type:"text/calendar;charset=utf-8"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "pendientes-recordatorios.ics";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+});
+
+/* ============ suscripción: dirección privada del calendario ============ */
+var cal = document.getElementById("cal");
+function closeCal(){ cal.classList.remove("open"); }
+document.getElementById("calCancel").addEventListener("click", closeCal);
+cal.addEventListener("click", function(e){ if(e.target === cal) closeCal(); });
+
+function urlFuncion(token){
+  // https://ref.supabase.co  ->  https://ref.supabase.co/functions/v1/calendario
+  return cfg().SUPABASE_URL.replace(/\/+$/,"") + "/functions/v1/calendario?t=" + token;
+}
+function mostrarEnlace(token){
+  document.getElementById("calLink").value = urlFuncion(token);
+  document.getElementById("calLinkWrap").style.display = "block";
+  document.getElementById("calAcciones").style.display = "flex";
+  document.getElementById("calAviso").style.display = "block";
+  document.getElementById("calGen").textContent = "Generar otra (anula la anterior)";
+}
+document.getElementById("mCal").addEventListener("click", function(){
+  closeMenu();
+  var msg = document.getElementById("calMsg");
+  msg.className = "ok-msg"; msg.textContent = "";
+  document.getElementById("calLinkWrap").style.display = "none";
+  document.getElementById("calAcciones").style.display = "none";
+  document.getElementById("calAviso").style.display = "none";
+  document.getElementById("calGen").textContent = "Generar mi dirección";
+
+  if(!cloudReady){
+    msg.className = "ok-msg show";
+    msg.textContent = "Primero activa la sincronización: el calendario lee tus pendientes desde la nube.";
+    cal.classList.add("open");
+    return;
+  }
+  // Si ya hay una dirección creada, la mostramos en vez de crear otra.
+  sb.from("calendario_tokens").select("token").eq("user_id", session.user.id).maybeSingle()
+    .then(function(r){
+      if(r && r.data && r.data.token) mostrarEnlace(r.data.token);
+    })["catch"](function(){});
+  cal.classList.add("open");
+});
+document.getElementById("calGen").addEventListener("click", function(){
+  var msg = document.getElementById("calMsg");
+  if(!cloudReady){ closeCal(); openAuth(); return; }
+  var token = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) +
+               Date.now().toString(36)).replace(/[^a-z0-9]/g,"");
+  msg.className = "ok-msg show"; msg.textContent = "Creando…";
+  sb.from("calendario_tokens").upsert(
+    { user_id: session.user.id, token: token }, { onConflict: "user_id" }
+  ).select().then(function(r){
+    if(r && r.error) throw r.error;
+    // Si la regla de seguridad bloquea la escritura, no llega ninguna fila.
+    if(!r.data || r.data.length === 0){
+      msg.textContent = "La base no aceptó guardar la dirección (0 filas). Falta correr el SQL de calendario_tokens.";
+      return;
+    }
+    msg.textContent = "Lista. Cópiala o toca Suscribirme.";
+    mostrarEnlace(token);
+  })["catch"](function(err){
+    msg.textContent = "No se pudo crear: " + ((err && err.message) || "revisa tu conexión");
+  });
+});
+document.getElementById("calCopy").addEventListener("click", function(){
+  var campo = document.getElementById("calLink");
+  var msg = document.getElementById("calMsg");
+  campo.select();
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(campo.value).then(function(){
+      msg.className = "ok-msg show"; msg.textContent = "Copiada.";
+    }, function(){
+      msg.className = "ok-msg show"; msg.textContent = "Selecciónala y cópiala a mano.";
+    });
+  } else {
+    msg.className = "ok-msg show"; msg.textContent = "Selecciónala y cópiala a mano.";
+  }
+});
+document.getElementById("calOpen").addEventListener("click", function(){
+  // webcal:// hace que el sistema la abra como suscripción, no como descarga.
+  var url = document.getElementById("calLink").value.replace(/^https?:/, "webcal:");
+  location.href = url;
+});
+
 document.getElementById("mImport").addEventListener("click", function(){ document.getElementById("fileIn").click(); });
 document.getElementById("fileIn").addEventListener("change", function(e){
   var f = e.target.files && e.target.files[0];

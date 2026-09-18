@@ -65,6 +65,8 @@
     <div class="grab"></div>
     <h2>Opciones</h2>
     <button class="menuitem" id="mCopy">Copiar marcas del mes anterior</button>
+    <button class="menuitem" id="mCal">Calendario automático (suscripción)</button>
+    <button class="menuitem" id="mIcs">Exportar recordatorios (.ics)</button>
     <button class="menuitem" id="mExport">Exportar respaldo (.json)</button>
     <button class="menuitem" id="mImport">Importar respaldo (.json)</button>
     <button class="menuitem" id="mSync">Sincronizar ahora</button>
@@ -84,7 +86,16 @@
     <label class="field"><span id="edNameLbl">Nombre</span><input type="text" id="edName" autocomplete="off"></label>
     <div id="edItemFields">
       <label class="field"><span>Nota (opcional)</span><input type="text" id="edNote" autocomplete="off"></label>
-      <label class="field"><span>Día límite del mes (opcional)</span><input type="number" id="edDay" min="1" max="31" inputmode="numeric"></label>
+      <label class="field"><span>¿Cuándo hay que hacerlo?</span>
+        <select id="edTipo">
+          <option value="ninguno">Sin fecha</option>
+          <option value="mensual">Cada mes, un día fijo</option>
+          <option value="fecha">Una fecha exacta</option>
+        </select>
+      </label>
+      <label class="field" id="edDayWrap"><span>Día del mes (1 al 31)</span><input type="number" id="edDay" min="1" max="31" inputmode="numeric"></label>
+      <label class="field" id="edDateWrap"><span>Fecha</span><input type="date" id="edDate"></label>
+      <label class="field" id="edTimeWrap"><span>Hora (opcional)</span><input type="time" id="edTime"></label>
     </div>
     <label class="field" id="edKindWrap"><span>Tipo de lista</span>
       <select id="edKind">
@@ -97,6 +108,26 @@
       <button class="btn" id="edCancel">Cancelar</button>
       <button class="btn primary" id="edSave">Guardar</button>
     </div>
+  </div>
+</div>
+
+<!-- Suscripción de calendario -->
+<div class="overlay" id="cal">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Calendario automático</h2>
+    <div class="ok-msg" id="calMsg"></div>
+    <p class="note" id="calNote">Esta dirección es un calendario vivo: tu celular y tu Mac la vuelven a leer solas cada cierto tiempo. Lo que agregues o borres aquí se corrige allá sin que hagas nada.</p>
+    <label class="field" id="calLinkWrap" style="display:none"><span>Tu dirección privada</span><input type="text" id="calLink" readonly></label>
+    <div class="sheetbtns">
+      <button class="btn" id="calCancel">Cerrar</button>
+      <button class="btn primary" id="calGen">Generar mi dirección</button>
+    </div>
+    <div class="sheetbtns" id="calAcciones" style="display:none">
+      <button class="btn" id="calCopy">Copiar</button>
+      <button class="btn primary" id="calOpen">Suscribirme</button>
+    </div>
+    <p class="note" id="calAviso" style="margin-top:14px;display:none">Quien tenga esta dirección puede ver tus pendientes. No la compartas. Si se te escapa, genera una nueva y la anterior deja de servir.</p>
   </div>
 </div>
 
